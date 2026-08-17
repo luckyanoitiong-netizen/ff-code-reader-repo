@@ -286,3 +286,82 @@ window.addEventListener("load", () => {
   log("Waiting for monitoring to start.");
 
 });
+// ==========================================
+// FF CODE RADAR — PUSH NOTIFICATION SYSTEM
+// ==========================================
+
+let pushReady = false;
+
+async function setupPushNotifications() {
+  try {
+    if (!("serviceWorker" in navigator)) {
+      log("❌ Service workers are not supported.");
+      return false;
+    }
+
+    const registration =
+      await navigator.serviceWorker.register(
+        "/ff-code-reader/service-worker.js",
+        { scope: "/ff-code-reader/" }
+      );
+
+    await navigator.serviceWorker.ready;
+
+    log("✅ Background notification service connected.");
+
+    if (!("Notification" in window)) {
+      log("❌ Notifications are not supported.");
+      return false;
+    }
+
+    const permission = await Notification.requestPermission();
+
+    if (permission === "granted") {
+      pushReady = true;
+
+      log("🔔 Push notifications enabled.");
+
+      return true;
+    }
+
+    log("⚠️ Notification permission was not granted.");
+
+    return false;
+
+  } catch (error) {
+
+    console.error(error);
+
+    log("❌ Could not connect notification service.");
+
+    return false;
+  }
+}
+
+// Replace the old notification button action
+const notificationButton = $("notifyBtn");
+
+if (notificationButton) {
+
+  notificationButton.onclick = async () => {
+
+    notificationButton.disabled = true;
+    notificationButton.textContent = "Connecting...";
+
+    const success =
+      await setupPushNotifications();
+
+    if (success) {
+
+      notificationButton.textContent =
+        "✓ Notifications Enabled";
+
+    } else {
+
+      notificationButton.disabled = false;
+
+      notificationButton.textContent =
+        "Enable Notifications";
+    }
+  };
+}
