@@ -301,8 +301,8 @@ async function setupPushNotifications() {
 
     const registration =
       await navigator.serviceWorker.register(
-        "/ff-code-reader/service-worker.js",
-        { scope: "/ff-code-reader/" }
+      "/ff-code-reader-repo/service-worker.js"
+        { scope: "/ff-code-reader-repo/"}
       );
 
     await navigator.serviceWorker.ready;
