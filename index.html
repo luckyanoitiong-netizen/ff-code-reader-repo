@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FF Code Radar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>⚡ FF Code Radar</h1>
+    <p>Fast legitimate Free Fire code alerts</p>
+  </div>
+  <span id="status" class="pill offline">MONITOR OFFLINE</span>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <span class="eyebrow">EARLY-ALERT SYSTEM</span>
+      <h2>Catch newly published codes as fast as possible.</h2>
+      <p>Monitors configured public/official sources, validates code format, removes duplicates and sends browser notifications.</p>
+    </div>
+    <button id="notifyBtn">Enable Notifications</button>
+  </section>
+
+  <section class="grid">
+    <article class="card">
+      <h3>Monitor</h3>
+      <div class="big" id="monitorState">OFF</div>
+      <button id="toggleBtn">Start Monitor</button>
+    </article>
+    <article class="card">
+      <h3>Region</h3>
+      <select id="region">
+        <option>MEA / Africa</option>
+        <option>Global</option>
+        <option>Indonesia</option>
+        <option>Thailand</option>
+        <option>Brazil</option>
+        <option>Pakistan</option>
+      </select>
+    </article>
+    <article class="card">
+      <h3>Scan interval</h3>
+      <select id="interval">
+        <option value="15">15 seconds</option>
+        <option value="30">30 seconds</option>
+        <option value="60" selected>60 seconds</option>
+        <option value="300">5 minutes</option>
+      </select>
+    </article>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h3>🚨 Latest codes</h3>
+      <button class="ghost" id="testBtn">Test Alert</button>
+    </div>
+    <div id="codes" class="codes">
+      <div class="empty">No newly detected codes yet.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><h3>Sources</h3><span>Public sources only</span></div>
+    <div class="sources">
+      <label><input type="checkbox" checked> Official Garena Free Fire news</label>
+      <label><input type="checkbox" checked> Official regional announcements</label>
+      <label><input type="checkbox" checked> Configured trusted public feeds</label>
+    </div>
+    <p class="note">The backend must be connected to real feeds/APIs. This browser app does not bypass Garena systems or predict secret codes.</p>
+  </section>
+
+  <section class="card">
+    <h3>Activity</h3>
+    <pre id="log">System ready.</pre>
+  </section>
+</main>
+
+<footer>FF Code Radar • Legitimate public-source monitoring</footer>
+<script src="app.js"></script>
+</body>
+</html>
