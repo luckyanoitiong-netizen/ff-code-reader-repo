@@ -1,367 +1,564 @@
-const $ = id => document.getElementById(id);
+// FF Code Radar
+// Main browser controller
 
-let running = false;
-let timer = null;
+const toggleBtn = document.getElementById("toggleBtn");
+const notifyBtn = document.getElementById("notifyBtn");
+const testBtn = document.getElementById("testBtn");
 
-// Activity log
+const status = document.getElementById("status");
+const monitorState = document.getElementById("monitorState");
+
+const codesBox = document.getElementById("codes");
+const logBox = document.getElementById("log");
+
+const regionSelect = document.getElementById("region");
+const intervalSelect = document.getElementById("interval");
+
+let monitoring = false;
+let monitorTimer = null;
+let knownCodes = new Set();
+
+
+// ================================
+// LOGGING
+// ================================
+
 function log(message) {
-  const time = new Date().toLocaleTimeString();
+    const time = new Date().toLocaleTimeString();
 
-  if ($("log")) {
-    $("log").textContent =
-      `[${time}] ${message}\n` + $("log").textContent;
-  }
+    console.log(`[FF Code Radar] ${message}`);
+
+    if (logBox) {
+        logBox.textContent =
+            `[${time}] ${message}\n` +
+            logBox.textContent;
+    }
 }
 
-// Browser notification
-async function notify(title, body) {
-  if (!("Notification" in window)) {
-    log("This browser does not support notifications.");
-    return;
-  }
 
-  if (Notification.permission === "granted") {
-    new Notification(title, {
-      body: body,
-      icon: "icon.png"
-    });
-  }
+// ================================
+// UPDATE MONITOR UI
+// ================================
+
+function updateMonitorUI() {
+
+    if (monitoring) {
+
+        status.textContent = "MONITOR ONLINE";
+        status.classList.remove("offline");
+        status.classList.add("online");
+
+        monitorState.textContent = "ON";
+
+        toggleBtn.textContent = "Stop Monitor";
+
+        log("Monitor is ONLINE.");
+
+    } else {
+
+        status.textContent = "MONITOR OFFLINE";
+        status.classList.remove("online");
+        status.classList.add("offline");
+
+        monitorState.textContent = "OFF";
+
+        toggleBtn.textContent = "Start Monitor";
+
+        log("Monitor is OFFLINE.");
+    }
 }
 
-// Request notification permission
-if ($("notifyBtn")) {
-  $("notifyBtn").onclick = async () => {
+
+// ================================
+// NOTIFICATIONS
+// ================================
+
+async function enableNotifications() {
+
     if (!("Notification" in window)) {
-      alert("Your browser does not support notifications.");
-      return;
+        log("This browser does not support notifications.");
+        return false;
     }
 
-    const permission = await Notification.requestPermission();
+    if (Notification.permission === "granted") {
+        log("Notifications are already enabled.");
+        return true;
+    }
+
+    if (Notification.permission === "denied") {
+        log("Notifications are blocked in browser settings.");
+        return false;
+    }
+
+    const permission =
+        await Notification.requestPermission();
 
     if (permission === "granted") {
-      log("✅ Notifications enabled.");
-      alert("Notifications are now enabled.");
-    } else {
-      log("❌ Notification permission was not granted.");
+        log("Browser notifications enabled.");
+
+        notifyBtn.textContent = "Notifications Enabled";
+
+        return true;
     }
-  };
+
+    log("Notification permission was not granted.");
+
+    return false;
 }
 
-// Add a detected code to the dashboard
-function addCode(code, source = "Public source", region = "Unknown") {
 
-  // Basic Free Fire-style code validation
-  if (!/^[A-Z0-9]{10,20}$/.test(code)) {
-    log(`Rejected invalid code: ${code}`);
-    return;
-  }
+// ================================
+// SEND NOTIFICATION
+// ================================
 
-  const codesBox = $("codes");
+function sendNotification(code) {
 
-  if (!codesBox) return;
+    if (!("Notification" in window)) {
+        return;
+    }
 
-  // Remove empty message
-  const empty = codesBox.querySelector(".empty");
-
-  if (empty) {
-    empty.remove();
-  }
-
-  // Prevent duplicates
-  const existingCodes = [...codesBox.querySelectorAll("strong")]
-    .map(element => element.textContent);
-
-  if (existingCodes.includes(code)) {
-    log(`Duplicate ignored: ${code}`);
-    return;
-  }
-
-  const row = document.createElement("div");
-
-  row.className = "code";
-
-  row.innerHTML = `
-    <div>
-      <strong>${code}</strong>
-      <div class="meta">
-        ${source} • ${region} • ${new Date().toLocaleString()}
-      </div>
-    </div>
-
-    <button class="copy-code">
-      Copy
-    </button>
-  `;
-
-  const copyButton = row.querySelector(".copy-code");
-
-  copyButton.addEventListener("click", async () => {
+    if (Notification.permission !== "granted") {
+        return;
+    }
 
     try {
-      await navigator.clipboard.writeText(code);
 
-      copyButton.textContent = "Copied!";
-      log(`📋 Code copied: ${code}`);
-
-      setTimeout(() => {
-        copyButton.textContent = "Copy";
-      }, 1500);
+        new Notification("🔥 FF Code Radar", {
+            body: `New redeem code detected: ${code}`,
+            icon: "icon-192.png"
+        });
 
     } catch (error) {
-      log("Could not copy code automatically.");
+
+        console.error(
+            "Notification error:",
+            error
+        );
     }
-  });
-
-  codesBox.prepend(row);
-
-  // Alert the user
-  notify(
-    "🚨 NEW FREE FIRE CODE",
-    `${code} has been detected.`
-  );
-
-  log(`🚨 NEW CODE: ${code}`);
 }
 
-// Test notification
-if ($("testBtn")) {
 
-  $("testBtn").onclick = () => {
+// ================================
+// VALIDATE CODE
+// ================================
 
-    addCode(
-      "AB12CD34EF56",
-      "Test Alert",
-      $("region")?.value || "MEA / Africa"
+function isValidCode(code) {
+
+    if (!code) {
+        return false;
+    }
+
+    const clean =
+        String(code)
+            .trim()
+            .toUpperCase();
+
+    return /^[A-Z0-9]{10,16}$/.test(clean);
+}
+
+
+// ================================
+// DISPLAY CODE
+// ================================
+
+function addCode(code) {
+
+    const clean =
+        String(code)
+            .trim()
+            .toUpperCase();
+
+    if (!isValidCode(clean)) {
+        return;
+    }
+
+    if (knownCodes.has(clean)) {
+        return;
+    }
+
+    knownCodes.add(clean);
+
+    // Remove "No newly detected codes yet."
+    const empty =
+        codesBox.querySelector(".empty");
+
+    if (empty) {
+        empty.remove();
+    }
+
+    const item =
+        document.createElement("div");
+
+    item.className = "code";
+
+    item.innerHTML = `
+        <div>
+            <strong>${clean}</strong>
+            <div class="meta">
+                Detected ${new Date().toLocaleTimeString()}
+            </div>
+        </div>
+
+        <button class="ghost">Copy</button>
+    `;
+
+    const copyButton =
+        item.querySelector("button");
+
+    copyButton.addEventListener(
+        "click",
+        async () => {
+
+            try {
+
+                await navigator.clipboard.writeText(clean);
+
+                copyButton.textContent =
+                    "Copied!";
+
+                setTimeout(() => {
+
+                    copyButton.textContent =
+                        "Copy";
+
+                }, 1500);
+
+            } catch (error) {
+
+                log("Could not copy code.");
+            }
+        }
     );
 
-  };
+    codesBox.prepend(item);
 
+    log(`NEW CODE DETECTED: ${clean}`);
+
+    sendNotification(clean);
 }
 
-// Scan public sources
+
+// ================================
+// SCAN
+// ================================
+
 async function scan() {
 
-  log("🔎 Checking configured sources...");
+    if (!monitoring) {
+        return;
+    }
 
-  /*
-    IMPORTANT:
+    const region =
+        regionSelect
+            ? regionSelect.value
+            : "MEA / Africa";
 
-    This is where the LIVE backend will eventually connect.
-
-    The browser itself cannot magically discover secret
-    Garena codes before they are publicly released.
-
-    Your backend should monitor legitimate public/official
-    sources and return newly discovered codes.
-
-    Example response:
-
-    [
-      {
-        "code": "XXXXXXXXXXXX",
-        "source": "Official Garena",
-        "region": "MEA"
-      }
-    ]
-  */
-
-  try {
+    log(`Scanning ${region}...`);
 
     /*
-      When the backend is ready, this can become:
+      This endpoint must exist on your backend
+      before real public feeds can be monitored.
 
-      const response = await fetch("/api/codes");
-      const data = await response.json();
+      Example:
 
-      data.forEach(item => {
-        addCode(
-          item.code,
-          item.source,
-          item.region
-        );
-      });
+      /api/codes
+
+      The browser itself cannot magically obtain
+      live redeem codes without a connected source.
     */
 
-    log("✅ Scan completed. No new codes detected.");
+    try {
 
-  } catch (error) {
+        const response =
+            await fetch("/api/codes", {
+                method: "GET",
+                cache: "no-store"
+            });
 
-    log("⚠️ Could not connect to monitoring server.");
+        if (!response.ok) {
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+        }
 
-  }
+        const data =
+            await response.json();
+
+        if (Array.isArray(data)) {
+
+            data.forEach(addCode);
+
+        } else if (
+            data &&
+            Array.isArray(data.codes)
+        ) {
+
+            data.codes.forEach(addCode);
+
+        } else if (
+            data &&
+            data.code
+        ) {
+
+            addCode(data.code);
+        }
+
+    } catch (error) {
+
+        /*
+          A failed scan should NOT turn
+          the monitor offline.
+
+          The monitor remains ON and tries again
+          on the next interval.
+        */
+
+        console.warn(
+            "Scan source unavailable:",
+            error
+        );
+
+        log(
+            "No connected code feed yet. Monitor remains ONLINE."
+        );
+    }
 }
 
-// Start / stop monitor
-if ($("toggleBtn")) {
 
-  $("toggleBtn").onclick = () => {
+// ================================
+// START MONITOR
+// ================================
 
-    running = !running;
+async function startMonitor() {
 
-    if (running) {
-
-      $("monitorState").textContent = "ON";
-
-      $("toggleBtn").textContent = "Stop Monitor";
-
-      $("status").textContent = "MONITOR ACTIVE";
-
-      $("status").className = "pill online";
-
-      log("🟢 Monitoring started.");
-
-      scan();
-
-      const seconds =
-        Number($("interval")?.value || 60);
-
-      timer = setInterval(
-        scan,
-        seconds * 1000
-      );
-
-    } else {
-
-      $("monitorState").textContent = "OFF";
-
-      $("toggleBtn").textContent = "Start Monitor";
-
-      $("status").textContent = "MONITOR OFFLINE";
-
-      $("status").className = "pill offline";
-
-      clearInterval(timer);
-
-      timer = null;
-
-      log("🔴 Monitoring stopped.");
-
+    if (monitoring) {
+        return;
     }
 
-  };
+    log("Starting monitor...");
 
-}
+    monitoring = true;
 
-// Change scanning interval
-if ($("interval")) {
+    updateMonitorUI();
 
-  $("interval").addEventListener("change", () => {
+    await enableNotifications();
 
-    if (!running) return;
-
-    clearInterval(timer);
+    // Scan immediately
+    await scan();
 
     const seconds =
-      Number($("interval").value || 60);
-
-    timer = setInterval(
-      scan,
-      seconds * 1000
-    );
-
-    log(`⏱️ Scan interval changed to ${seconds} seconds.`);
-
-  });
-
-}
-
-// Region change
-if ($("region")) {
-
-  $("region").addEventListener("change", () => {
+        Number(intervalSelect.value) || 60;
 
     log(
-      `🌍 Region set to ${$("region").value}.`
+        `Automatic scanning every ${seconds} seconds.`
     );
 
-  });
-
+    monitorTimer =
+        setInterval(
+            scan,
+            seconds * 1000
+        );
 }
 
-// Initial system message
-window.addEventListener("load", () => {
 
-  log("⚡ FF Code Radar loaded.");
+// ================================
+// STOP MONITOR
+// ================================
 
-  log("Waiting for monitoring to start.");
+function stopMonitor() {
 
-});
-// ==========================================
-// FF CODE RADAR — PUSH NOTIFICATION SYSTEM
-// ==========================================
+    if (!monitoring) {
+        return;
+    }
 
-let pushReady = false;
+    monitoring = false;
 
-async function setupPushNotifications() {
-  try {
+    if (monitorTimer) {
+
+        clearInterval(
+            monitorTimer
+        );
+
+        monitorTimer = null;
+    }
+
+    updateMonitorUI();
+
+    log("Monitor stopped.");
+}
+
+
+// ================================
+// TOGGLE BUTTON
+// ================================
+
+toggleBtn.addEventListener(
+    "click",
+    () => {
+
+        if (monitoring) {
+
+            stopMonitor();
+
+        } else {
+
+            startMonitor();
+        }
+    }
+);
+
+
+// ================================
+// NOTIFICATION BUTTON
+// ================================
+
+notifyBtn.addEventListener(
+    "click",
+    enableNotifications
+);
+
+
+// ================================
+// TEST ALERT
+// ================================
+
+testBtn.addEventListener(
+    "click",
+    async () => {
+
+        log("Testing notification system...");
+
+        const allowed =
+            await enableNotifications();
+
+        if (!allowed) {
+            log(
+                "Test failed: notifications are not enabled."
+            );
+
+            return;
+        }
+
+        sendNotification(
+            "TEST-CODE-1234"
+        );
+
+        log(
+            "Test notification sent."
+        );
+    }
+);
+
+
+// ================================
+// REGION CHANGE
+// ================================
+
+regionSelect.addEventListener(
+    "change",
+    () => {
+
+        log(
+            `Region changed to ${regionSelect.value}.`
+        );
+
+        if (monitoring) {
+            log(
+                "New region will be used on the next scan."
+            );
+        }
+    }
+);
+
+
+// ================================
+// INTERVAL CHANGE
+// ================================
+
+intervalSelect.addEventListener(
+    "change",
+    () => {
+
+        const seconds =
+            Number(intervalSelect.value);
+
+        log(
+            `Scan interval changed to ${seconds} seconds.`
+        );
+
+        if (monitoring) {
+
+            clearInterval(
+                monitorTimer
+            );
+
+            monitorTimer =
+                setInterval(
+                    scan,
+                    seconds * 1000
+                );
+        }
+    }
+);
+
+
+// ================================
+// SERVICE WORKER
+// ================================
+
+async function registerServiceWorker() {
+
     if (!("serviceWorker" in navigator)) {
-      log("❌ Service workers are not supported.");
-      return false;
+
+        log(
+            "Service workers are not supported."
+        );
+
+        return;
     }
 
-    const registration =
-      await navigator.serviceWorker.register(
-      "/ff-code-reader-repo/service-worker.js"
-        { scope: "/ff-code-reader-repo/"}
-      );
+    try {
 
-    await navigator.serviceWorker.ready;
+        await navigator.serviceWorker.register(
+            "./service-worker.js"
+        );
 
-    log("✅ Background notification service connected.");
+        log(
+            "Service worker connected."
+        );
 
-    if (!("Notification" in window)) {
-      log("❌ Notifications are not supported.");
-      return false;
+    } catch (error) {
+
+        console.error(
+            "Service worker error:",
+            error
+        );
+
+        log(
+            "Service worker connection failed."
+        );
     }
-
-    const permission = await Notification.requestPermission();
-
-    if (permission === "granted") {
-      pushReady = true;
-
-      log("🔔 Push notifications enabled.");
-
-      return true;
-    }
-
-    log("⚠️ Notification permission was not granted.");
-
-    return false;
-
-  } catch (error) {
-
-    console.error(error);
-
-    log("❌ Could not connect notification service.");
-
-    return false;
-  }
 }
 
-// Replace the old notification button action
-const notificationButton = $("notifyBtn");
 
-if (notificationButton) {
+// ================================
+// STARTUP
+// ================================
 
-  notificationButton.onclick = async () => {
+async function initialize() {
 
-    notificationButton.disabled = true;
-    notificationButton.textContent = "Connecting...";
+    log(
+        "FF Code Radar loaded."
+    );
 
-    const success =
-      await setupPushNotifications();
+    updateMonitorUI();
 
-    if (success) {
+    await registerServiceWorker();
 
-      notificationButton.textContent =
-        "✓ Notifications Enabled";
-
-    } else {
-
-      notificationButton.disabled = false;
-
-      notificationButton.textContent =
-        "Enable Notifications";
-    }
-  };
+    log(
+        "System ready."
+    );
 }
+
+
+initialize();
