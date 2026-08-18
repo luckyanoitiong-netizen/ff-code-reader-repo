@@ -1,0 +1,39 @@
+name: FF Code Radar Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run collector
+        run: node collector.js
+
+      - name: Save updated codes
+        run: |
+          git config user.name "FF Code Radar Bot"
+          git config user.email "actions@users.noreply.github.com"
+
+          git add data/codes.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update redeem codes"
+            git push
+          fi
